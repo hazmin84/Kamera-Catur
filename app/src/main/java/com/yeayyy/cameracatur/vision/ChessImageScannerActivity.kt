@@ -3,18 +3,18 @@ package com.yeayyy.cameracatur.vision
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.view.View
-import android.widget.Toast
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.yeayyy.cameracatur.databinding.ActivityChessScannerBinding
+import com.yeayyy.cameracatur.R
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.ExecutorService
@@ -22,7 +22,12 @@ import java.util.concurrent.Executors
 
 class ChessImageScannerActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityChessScannerBinding
+    private lateinit var viewFinder: PreviewView
+    private lateinit var btnCapture: Button
+    private lateinit var btnClose: ImageButton
+    private lateinit var progressBar: ProgressBar
+    private lateinit var tvScanningStatus: TextView
+
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
     private val boardDetector = ChessBoardDetector()
@@ -40,8 +45,13 @@ class ChessImageScannerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityChessScannerBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        setContentView(R.layout.activity_chess_scanner)
+
+        viewFinder = findViewById(R.id.viewFinder)
+        btnCapture = findViewById(R.id.btnCapture)
+        btnClose = findViewById(R.id.btnClose)
+        progressBar = findViewById(R.id.progressBar)
+        tvScanningStatus = findViewById(R.id.tvScanningStatus)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
@@ -51,11 +61,11 @@ class ChessImageScannerActivity : AppCompatActivity() {
             requestPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
 
-        binding.btnCapture.setOnClickListener {
+        btnCapture.setOnClickListener {
             takePhotoAndAnalyze()
         }
 
-        binding.btnClose.setOnClickListener {
+        btnClose.setOnClickListener {
             finish()
         }
     }
@@ -67,7 +77,7 @@ class ChessImageScannerActivity : AppCompatActivity() {
             val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
 
             val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(binding.viewFinder.surfaceProvider)
+                it.setSurfaceProvider(viewFinder.surfaceProvider)
             }
 
             imageCapture = ImageCapture.Builder()
@@ -88,9 +98,9 @@ class ChessImageScannerActivity : AppCompatActivity() {
     private fun takePhotoAndAnalyze() {
         val imageCapture = imageCapture ?: return
 
-        binding.progressBar.visibility = View.VISIBLE
-        binding.tvScanningStatus.visibility = View.VISIBLE
-        binding.btnCapture.isEnabled = false
+        progressBar.visibility = View.VISIBLE
+        tvScanningStatus.visibility = View.VISIBLE
+        btnCapture.isEnabled = false
 
         val photoFile = File(outputDirectory, "chess_snap_${System.currentTimeMillis()}.jpg")
         val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
@@ -100,9 +110,9 @@ class ChessImageScannerActivity : AppCompatActivity() {
             ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onError(exc: ImageCaptureException) {
-                    binding.progressBar.visibility = View.GONE
-                    binding.tvScanningStatus.visibility = View.GONE
-                    binding.btnCapture.isEnabled = true
+                    progressBar.visibility = View.GONE
+                    tvScanningStatus.visibility = View.GONE
+                    btnCapture.isEnabled = true
                     Toast.makeText(this@ChessImageScannerActivity, "Ralat tangkap foto: ${exc.message}", Toast.LENGTH_SHORT).show()
                 }
 

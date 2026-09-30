@@ -1,16 +1,16 @@
 package com.yeayyy.cameracatur
 
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Button
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.yeayyy.cameracatur.chess.ChessBoard
-import com.yeayyy.cameracatur.databinding.ActivityMainBinding
+import com.yeayyy.cameracatur.ui.ChessBoardView
 import com.yeayyy.cameracatur.engine.StockfishEngineService
 import com.yeayyy.cameracatur.vision.ChessBoardDetector
 import com.yeayyy.cameracatur.vision.ChessImageScannerActivity
@@ -18,7 +18,14 @@ import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMainBinding
+    private lateinit var chessBoardView: ChessBoardView
+    private lateinit var tvWhiteEval: TextView
+    private lateinit var tvBlackEval: TextView
+    private lateinit var btnScanCamera: Button
+    private lateinit var btnPickGallery: Button
+    private lateinit var btnFlipBoard: Button
+    private lateinit var btnResetBoard: Button
+
     private val engineService = StockfishEngineService()
     private val boardDetector = ChessBoardDetector()
 
@@ -39,8 +46,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        setContentView(R.layout.activity_main)
+
+        chessBoardView = findViewById(R.id.chessBoardView)
+        tvWhiteEval = findViewById(R.id.tvWhiteEval)
+        tvBlackEval = findViewById(R.id.tvBlackEval)
+        btnScanCamera = findViewById(R.id.btnScanCamera)
+        btnPickGallery = findViewById(R.id.btnPickGallery)
+        btnFlipBoard = findViewById(R.id.btnFlipBoard)
+        btnResetBoard = findViewById(R.id.btnResetBoard)
 
         setupListeners()
         triggerAiEvaluation()
@@ -48,29 +62,29 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         // 1. Live Camera Snap
-        binding.btnScanCamera.setOnClickListener {
+        btnScanCamera.setOnClickListener {
             val intent = Intent(this, ChessImageScannerActivity::class.java)
             scanCameraLauncher.launch(intent)
         }
 
         // 2. Pick from Gallery
-        binding.btnPickGallery.setOnClickListener {
+        btnPickGallery.setOnClickListener {
             pickImageLauncher.launch("image/*")
         }
 
         // 3. Flip Board (Toggle Perspective)
-        binding.btnFlipBoard.setOnClickListener {
-            binding.chessBoardView.flipBoard()
+        btnFlipBoard.setOnClickListener {
+            chessBoardView.flipBoard()
         }
 
         // 4. Reset to Initial Standard Position
-        binding.btnResetBoard.setOnClickListener {
-            binding.chessBoardView.loadFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+        btnResetBoard.setOnClickListener {
+            chessBoardView.loadFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
             triggerAiEvaluation()
         }
 
         // 5. Board interactive move listener -> auto re-eval
-        binding.chessBoardView.onMoveListener = {
+        chessBoardView.onMoveListener = {
             triggerAiEvaluation()
         }
     }
@@ -95,24 +109,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyDetectedFen(fen: String) {
-        binding.chessBoardView.loadFen(fen)
+        chessBoardView.loadFen(fen)
         triggerAiEvaluation()
     }
 
     private fun triggerAiEvaluation() {
-        val currentFen = binding.chessBoardView.chessBoard.toFen()
-        binding.tvWhiteEval.text = "Mengira..."
-        binding.tvBlackEval.text = "Mengira..."
+        val currentFen = chessBoardView.chessBoard.toFen()
+        tvWhiteEval.text = "Mengira..."
+        tvBlackEval.text = "Mengira..."
 
         lifecycleScope.launch {
             val (evalWhite, evalBlack) = engineService.evaluateDualSide(currentFen, depth = 4)
 
-            binding.chessBoardView.hintMoveWhite = evalWhite.bestMove
-            binding.chessBoardView.hintMoveBlack = evalBlack.bestMove
-            binding.chessBoardView.invalidate()
+            chessBoardView.hintMoveWhite = evalWhite.bestMove
+            chessBoardView.hintMoveBlack = evalBlack.bestMove
+            chessBoardView.invalidate()
 
-            binding.tvWhiteEval.text = evalWhite.bestMove?.uci?.uppercase() ?: "Tiada"
-            binding.tvBlackEval.text = evalBlack.bestMove?.uci?.uppercase() ?: "Tiada"
+            tvWhiteEval.text = evalWhite.bestMove?.uci?.uppercase() ?: "Tiada"
+            tvBlackEval.text = evalBlack.bestMove?.uci?.uppercase() ?: "Tiada"
         }
     }
 }

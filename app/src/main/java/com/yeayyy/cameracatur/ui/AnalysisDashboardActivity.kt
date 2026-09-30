@@ -1,26 +1,40 @@
 package com.yeayyy.cameracatur.ui
 
 import android.os.Bundle
+import android.widget.ImageButton
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.yeayyy.cameracatur.databinding.ActivityAnalysisDashboardBinding
+import com.yeayyy.cameracatur.R
 import com.yeayyy.cameracatur.engine.StockfishEngineService
 import kotlinx.coroutines.launch
 
 class AnalysisDashboardActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityAnalysisDashboardBinding
+    private lateinit var chessBoardView: ChessBoardView
+    private lateinit var btnBack: ImageButton
+    private lateinit var tvWhiteMove: TextView
+    private lateinit var tvWhiteCommentary: TextView
+    private lateinit var tvBlackMove: TextView
+    private lateinit var tvBlackCommentary: TextView
+
     private val engineService = StockfishEngineService()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityAnalysisDashboardBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        setContentView(R.layout.activity_analysis_dashboard)
+
+        chessBoardView = findViewById(R.id.chessBoardView)
+        btnBack = findViewById(R.id.btnBack)
+        tvWhiteMove = findViewById(R.id.tvWhiteMove)
+        tvWhiteCommentary = findViewById(R.id.tvWhiteCommentary)
+        tvBlackMove = findViewById(R.id.tvBlackMove)
+        tvBlackCommentary = findViewById(R.id.tvBlackCommentary)
 
         val fen = intent.getStringExtra("EXTRA_FEN") ?: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-        binding.chessBoardView.loadFen(fen)
+        chessBoardView.loadFen(fen)
 
-        binding.btnBack.setOnClickListener {
+        btnBack.setOnClickListener {
             finish()
         }
 
@@ -32,15 +46,15 @@ class AnalysisDashboardActivity : AppCompatActivity() {
             val (evalWhite, evalBlack) = engineService.evaluateDualSide(fen, depth = 5)
 
             // Update UI with Stockfish insights
-            binding.tvWhiteMove.text = "Langkah Terbaik Putih: ${evalWhite.bestMove?.uci?.uppercase() ?: "N/A"}"
-            binding.tvWhiteCommentary.text = evalWhite.commentary
+            tvWhiteMove.text = "Langkah Terbaik Putih: ${evalWhite.bestMove?.uci?.uppercase() ?: "N/A"}"
+            tvWhiteCommentary.text = evalWhite.commentary
 
-            binding.tvBlackMove.text = "Langkah Terbaik Hitam: ${evalBlack.bestMove?.uci?.uppercase() ?: "N/A"}"
-            binding.tvBlackCommentary.text = evalBlack.commentary
+            tvBlackMove.text = "Langkah Terbaik Hitam: ${evalBlack.bestMove?.uci?.uppercase() ?: "N/A"}"
+            tvBlackCommentary.text = evalBlack.commentary
 
-            binding.chessBoardView.hintMoveWhite = evalWhite.bestMove
-            binding.chessBoardView.hintMoveBlack = evalBlack.bestMove
-            binding.chessBoardView.invalidate()
+            chessBoardView.hintMoveWhite = evalWhite.bestMove
+            chessBoardView.hintMoveBlack = evalBlack.bestMove
+            chessBoardView.invalidate()
         }
     }
 }
