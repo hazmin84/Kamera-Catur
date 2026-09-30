@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/bg_dark"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:id="@+id/dialogSquareTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Pilih Buah di Petak e4"
+        android:textColor="@color/accent_gold"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="16dp"
+        android:text="Ketuk buah yang betul atau kosongkan petak:"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp" />
+
+    <!-- White Pieces Row -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="⚪ Buah Putih:"
+        android:textColor="@color/white"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="14dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnPieceWP"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♙"
+            android:textColor="@color/white"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/btnPieceWN"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♘"
+            android:textColor="@color/white"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/btnPieceWB"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♗"
+            android:textColor="@color/white"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/btnPieceWR"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♖"
+            android:textColor="@color/white"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/btnPieceWQ"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♕"
+            android:textColor="@color/white"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/btnPieceWK"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♔"
+            android:textColor="@color/white"
+            android:textSize="20sp" />
+    </LinearLayout>
+
+    <!-- Black Pieces Row -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="⚫ Buah Hitam / Biru:"
+        android:textColor="@color/text_primary"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="16dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnPieceBP"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♟"
+            android:textColor="@color/accent_gold"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/btnPieceBN"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♞"
+            android:textColor="@color/accent_gold"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/btnPieceBB"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♝"
+            android:textColor="@color/accent_gold"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/btnPieceBR"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♜"
+            android:textColor="@color/accent_gold"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/btnPieceBQ"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♛"
+            android:textColor="@color/accent_gold"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/btnPieceBK"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:backgroundTint="@color/bg_surface"
+            android:text="♚"
+            android:textColor="@color/accent_gold"
+            android:textSize="20sp" />
+    </LinearLayout>
+
+    <!-- Empty Square Action -->
+    <Button
+        android:id="@+id/btnPieceEmpty"
+        android:layout_width="match_parent"
+        android:layout_height="46dp"
+        android:backgroundTint="#991B1B"
+        android:text="🗑️ Kosongkan Petak Ini"
+        android:textColor="@color/white"
+        android:textSize="14sp" />
+
+</LinearLayout>

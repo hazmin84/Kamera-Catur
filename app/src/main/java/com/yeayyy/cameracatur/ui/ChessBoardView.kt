@@ -3,11 +3,13 @@ package com.yeayyy.cameracatur.ui
 import android.content.Context
 import android.graphics.*
 import android.util.AttributeSet
+import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
 import com.yeayyy.cameracatur.R
 import com.yeayyy.cameracatur.chess.*
+import kotlin.math.min
 
 class ChessBoardView @JvmOverloads constructor(
     context: Context,
@@ -16,201 +18,244 @@ class ChessBoardView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     val chessBoard = ChessBoard()
-    var isFlipped = false
-    var selectedSquare: Square? = null
-    var lastMove: ChessMove? = null
+    var isFlipped = false // false: White at bottom, true: Black at bottom
+    var onMoveListener: (() -> Unit)? = null
+    var onSquareLongClickListener: ((Square) -> Unit)? = null
+
+    // Engine hint moves
     var hintMoveWhite: ChessMove? = null
     var hintMoveBlack: ChessMove? = null
 
-    var onMoveListener: ((ChessMove) -> Unit)? = null
+    private var selectedSquare: Square? = null
+    private var legalMovesForSelected = listOf<ChessMove>()
 
-    private val lightSquarePaint = Paint().apply {
+    // Paints
+    private val lightSquarePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.chess_board_light)
-        style = Paint.Style.FILL
     }
-
-    private val darkSquarePaint = Paint().apply {
+    private val darkSquarePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.chess_board_dark)
-        style = Paint.Style.FILL
     }
-
-    private val highlightPaint = Paint().apply {
-        color = ContextCompat.getColor(context, R.color.chess_highlight_to)
-        style = Paint.Style.FILL
-        alpha = 180
-    }
-
-    private val selectedPaint = Paint().apply {
+    private val selectedSquarePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.chess_highlight_from)
-        style = Paint.Style.FILL
-        alpha = 200
     }
-
-    private val hintArrowPaint = Paint().apply {
-        color = ContextCompat.getColor(context, R.color.chess_hint_arrow)
-        strokeWidth = 12f
+    private val legalMoveDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#77000000")
+        style = Paint.Style.FILL
+    }
+    private val hintWhiteArrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.chess_best_move_glow)
+        strokeWidth = 10f
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
-        isAntiAlias = true
     }
-
-    private val pieceTextPaint = Paint().apply {
+    private val hintBlackArrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.accent_gold)
+        strokeWidth = 10f
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
-        isAntiAlias = true
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 24f
         typeface = Typeface.DEFAULT_BOLD
     }
 
-    private val coordPaint = Paint().apply {
-        textSize = 28f
-        isAntiAlias = true
-        typeface = Typeface.DEFAULT_BOLD
-    }
+    private var squareSize = 0f
+    private var boardLeft = 0f
+    private var boardTop = 0f
+
+    private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onLongPress(e: MotionEvent) {
+            val sq = getSquareFromTouch(e.x, e.y)
+            if (sq != null) {
+                onSquareLongClickListener?.invoke(sq)
+            }
+        }
+    })
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val w = MeasureSpec.getSize(widthMeasureSpec)
-        val h = MeasureSpec.getSize(heightMeasureSpec)
-        val size = if (w < h && w > 0) w else if (h > 0) h else w
+        val width = MeasureSpec.getSize(widthMeasureSpec)
+        val height = MeasureSpec.getSize(heightMeasureSpec)
+        val size = min(width, height)
         setMeasuredDimension(size, size)
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        val boardSize = min(w, h).toFloat()
+        squareSize = boardSize / 8f
+        boardLeft = (w - boardSize) / 2f
+        boardTop = (h - boardSize) / 2f
+        textPaint.textSize = squareSize * 0.75f
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val squareSize = width / 8f
-        pieceTextPaint.textSize = squareSize * 0.75f
 
-        // 1. Draw 64 Squares (Chess.com Style)
-        for (r in 0..7) {
-            for (f in 0..7) {
-                val drawCol = if (isFlipped) 7 - f else f
-                val drawRow = if (isFlipped) r else 7 - r
+        // 1. Lukis 64 Petak Papan Catur
+        for (rank in 0..7) {
+            for (file in 0..7) {
+                val displayFile = if (isFlipped) 7 - file else file
+                val displayRank = if (isFlipped) rank else 7 - rank
 
-                val isLight = (f + r) % 2 != 0
-                val paint = if (isLight) lightSquarePaint else darkSquarePaint
+                val left = boardLeft + displayFile * squareSize
+                val top = boardTop + displayRank * squareSize
+                val right = left + squareSize
+                val bottom = top + squareSize
 
-                val left = drawCol * squareSize
-                val top = drawRow * squareSize
-                canvas.drawRect(left, top, left + squareSize, top + squareSize, paint)
+                val isLightSquare = (file + rank) % 2 != 0
+                val sq = Square(file, rank)
 
-                // Selected square highlight
-                if (selectedSquare?.file == f && selectedSquare?.rank == r) {
-                    canvas.drawRect(left, top, left + squareSize, top + squareSize, selectedPaint)
+                // Highlight selected square
+                val paint = when {
+                    selectedSquare == sq -> selectedSquarePaint
+                    isLightSquare -> lightSquarePaint
+                    else -> darkSquarePaint
                 }
 
-                // Last move highlight
-                if (lastMove != null && ((lastMove!!.from.file == f && lastMove!!.from.rank == r) ||
-                            (lastMove!!.to.file == f && lastMove!!.to.rank == r))) {
-                    canvas.drawRect(left, top, left + squareSize, top + squareSize, highlightPaint)
+                canvas.drawRect(left, top, right, bottom, paint)
+
+                // Label koordinat (Files a-h pada rank bawah, Ranks 1-8 pada file kiri)
+                if (displayRank == 7) {
+                    labelPaint.color = if (isLightSquare) Color.parseColor("#739552") else Color.parseColor("#EBECD0")
+                    canvas.drawText(sq.fileName, left + 6f, bottom - 6f, labelPaint)
+                }
+                if (displayFile == 0) {
+                    labelPaint.color = if (isLightSquare) Color.parseColor("#739552") else Color.parseColor("#EBECD0")
+                    canvas.drawText(sq.rankName, left + 6f, top + 24f, labelPaint)
+                }
+
+                // 2. Lukis Buah Catur (Unicode Chess Glyphs)
+                val piece = chessBoard.getPiece(sq)
+                if (piece != null) {
+                    textPaint.color = if (piece.color == PieceColor.WHITE) Color.WHITE else Color.BLACK
+                    val glyph = if (piece.color == PieceColor.WHITE) piece.type.unicodeWhite else piece.type.unicodeBlack
+
+                    // Tambah sedikit bayang halus untuk buah putih/hitam
+                    val fontMetrics = textPaint.fontMetrics
+                    val baseline = top + (squareSize - fontMetrics.bottom + fontMetrics.top) / 2 - fontMetrics.top
+                    canvas.drawText(glyph, left + squareSize / 2, baseline, textPaint)
                 }
             }
         }
 
-        // 2. Draw Coordinates (a-h, 1-8)
-        for (i in 0..7) {
-            val fileChar = if (isFlipped) ('h' - i) else ('a' + i)
-            val rankChar = if (isFlipped) (i + 1) else (8 - i)
+        // 3. Lukis Penunjuk Langkah Sah (Move Targets)
+        for (move in legalMovesForSelected) {
+            val displayFile = if (isFlipped) 7 - move.to.file else move.to.file
+            val displayRank = if (isFlipped) move.to.rank else 7 - move.to.rank
 
-            // File letters at bottom
-            coordPaint.color = if (i % 2 == 0) ContextCompat.getColor(context, R.color.chess_board_dark) else ContextCompat.getColor(context, R.color.chess_board_light)
-            canvas.drawText("$fileChar", (i + 0.85f) * squareSize, height - 8f, coordPaint)
+            val cx = boardLeft + (displayFile + 0.5f) * squareSize
+            val cy = boardTop + (displayRank + 0.5f) * squareSize
 
-            // Rank numbers at left
-            canvas.drawText("$rankChar", 8f, (i + 0.35f) * squareSize, coordPaint)
-        }
-
-        // 3. Draw Chess Pieces
-        for (r in 0..7) {
-            for (f in 0..7) {
-                val piece = chessBoard.getPiece(f, r) ?: continue
-                val drawCol = if (isFlipped) 7 - f else f
-                val drawRow = if (isFlipped) r else 7 - r
-
-                val cx = (drawCol + 0.5f) * squareSize
-                val cy = (drawRow + 0.72f) * squareSize
-
-                pieceTextPaint.color = if (piece.color == PieceColor.WHITE) Color.WHITE else Color.BLACK
-                pieceTextPaint.setShadowLayer(
-                    8f, 0f, 4f,
-                    if (piece.color == PieceColor.WHITE) Color.parseColor("#80000000") else Color.parseColor("#80FFFFFF")
-                )
-                canvas.drawText(piece.displaySymbol, cx, cy, pieceTextPaint)
-                pieceTextPaint.clearShadowLayer()
+            val isCapture = chessBoard.getPiece(move.to) != null
+            if (isCapture) {
+                legalMoveDotPaint.style = Paint.Style.STROKE
+                legalMoveDotPaint.strokeWidth = 6f
+                canvas.drawCircle(cx, cy, squareSize * 0.4f, legalMoveDotPaint)
+            } else {
+                legalMoveDotPaint.style = Paint.Style.FILL
+                canvas.drawCircle(cx, cy, squareSize * 0.16f, legalMoveDotPaint)
             }
         }
 
-        // 4. Draw Hint Arrows (AI Stockfish Suggestions)
-        drawHintArrow(canvas, hintMoveWhite, squareSize, Color.parseColor("#4CAF50"))
-        drawHintArrow(canvas, hintMoveBlack, squareSize, Color.parseColor("#FF9800"))
+        // 4. Lukis Hint Arrows Stockfish AI
+        hintMoveWhite?.let { drawHintArrow(canvas, it, hintWhiteArrowPaint) }
+        hintMoveBlack?.let { drawHintArrow(canvas, it, hintBlackArrowPaint) }
     }
 
-    private fun drawHintArrow(canvas: Canvas, move: ChessMove?, squareSize: Float, arrowColor: Int) {
-        if (move == null) return
-        hintArrowPaint.color = arrowColor
+    private fun drawHintArrow(canvas: Canvas, move: ChessMove, paint: Paint) {
+        val fromFile = if (isFlipped) 7 - move.from.file else move.from.file
+        val fromRank = if (isFlipped) move.from.rank else 7 - move.from.rank
+        val toFile = if (isFlipped) 7 - move.to.file else move.to.file
+        val toRank = if (isFlipped) move.to.rank else 7 - move.to.rank
 
-        val fromCol = if (isFlipped) 7 - move.from.file else move.from.file
-        val fromRow = if (isFlipped) move.from.rank else 7 - move.from.rank
-        val toCol = if (isFlipped) 7 - move.to.file else move.to.file
-        val toRow = if (isFlipped) move.to.rank else 7 - move.to.rank
+        val startX = boardLeft + (fromFile + 0.5f) * squareSize
+        val startY = boardTop + (fromRank + 0.5f) * squareSize
+        val endX = boardLeft + (toFile + 0.5f) * squareSize
+        val endY = boardTop + (toRank + 0.5f) * squareSize
 
-        val x1 = (fromCol + 0.5f) * squareSize
-        val y1 = (fromRow + 0.5f) * squareSize
-        val x2 = (toCol + 0.5f) * squareSize
-        val y2 = (toRow + 0.5f) * squareSize
-
-        canvas.drawLine(x1, y1, x2, y2, hintArrowPaint)
-        canvas.drawCircle(x2, y2, squareSize * 0.18f, Paint().apply { color = arrowColor; style = Paint.Style.FILL })
+        canvas.drawLine(startX, startY, endX, endY, paint)
+        paint.style = Paint.Style.FILL
+        canvas.drawCircle(endX, endY, 14f, paint)
+        paint.style = Paint.Style.STROKE
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_DOWN) {
-            val squareSize = width / 8f
-            val col = (event.x / squareSize).toInt().coerceIn(0, 7)
-            val row = (event.y / squareSize).toInt().coerceIn(0, 7)
+        gestureDetector.onTouchEvent(event)
 
-            val file = if (isFlipped) 7 - col else col
-            val rank = if (isFlipped) row else 7 - row
-            val clickedSq = Square(file, rank)
-
-            if (selectedSquare == null) {
-                val piece = chessBoard.getPiece(clickedSq)
-                if (piece != null && piece.color == chessBoard.activeColor) {
-                    selectedSquare = clickedSq
-                    invalidate()
-                }
-            } else {
-                val fromSq = selectedSquare!!
-                if (fromSq == clickedSq) {
-                    selectedSquare = null
-                    invalidate()
-                } else {
-                    val move = ChessMove(fromSq, clickedSq)
-                    val success = chessBoard.makeMove(move)
-                    if (success) {
-                        lastMove = move
-                        selectedSquare = null
-                        invalidate()
-                        onMoveListener?.invoke(move)
-                    } else {
-                        // Reselect another piece of current turn
-                        val newPiece = chessBoard.getPiece(clickedSq)
-                        if (newPiece != null && newPiece.color == chessBoard.activeColor) {
-                            selectedSquare = clickedSq
-                        } else {
-                            selectedSquare = null
-                        }
-                        invalidate()
-                    }
-                }
+        if (event.action == MotionEvent.ACTION_UP) {
+            val clickedSq = getSquareFromTouch(event.x, event.y)
+            if (clickedSq != null) {
+                handleSquareClick(clickedSq)
             }
-            return true
         }
-        return super.onTouchEvent(event)
+        return true
+    }
+
+    private fun handleSquareClick(square: Square) {
+        val selected = selectedSquare
+        if (selected == null) {
+            // Pilih buah jika ada di petak tersebut
+            val piece = chessBoard.getPiece(square)
+            if (piece != null) {
+                selectedSquare = square
+                legalMovesForSelected = chessBoard.generateLegalMovesForSquare(square)
+                invalidate()
+            }
+        } else {
+            // Cuba buat langkah
+            val targetMove = legalMovesForSelected.firstOrNull { it.to == square }
+            if (targetMove != null) {
+                chessBoard.makeMove(targetMove)
+                selectedSquare = null
+                legalMovesForSelected = emptyList()
+                invalidate()
+                onMoveListener?.invoke()
+            } else {
+                // Pilih buah lain jika kepunyaan pemain
+                val newPiece = chessBoard.getPiece(square)
+                if (newPiece != null) {
+                    selectedSquare = square
+                    legalMovesForSelected = chessBoard.generateLegalMovesForSquare(square)
+                } else {
+                    selectedSquare = null
+                    legalMovesForSelected = emptyList()
+                }
+                invalidate()
+            }
+        }
+    }
+
+    private fun getSquareFromTouch(x: Float, y: Float): Square? {
+        if (x < boardLeft || x > boardLeft + 8 * squareSize || y < boardTop || y > boardTop + 8 * squareSize) {
+            return null
+        }
+        val fileIdx = ((x - boardLeft) / squareSize).toInt().coerceIn(0, 7)
+        val rankIdx = ((y - boardTop) / squareSize).toInt().coerceIn(0, 7)
+
+        val file = if (isFlipped) 7 - fileIdx else fileIdx
+        val rank = if (isFlipped) rankIdx else 7 - rankIdx
+
+        return Square(file, rank)
     }
 
     fun loadFen(fen: String) {
         chessBoard.loadFen(fen)
         selectedSquare = null
-        lastMove = null
+        legalMovesForSelected = emptyList()
         invalidate()
+    }
+
+    fun setPieceAtSquare(square: Square, piece: ChessPiece?) {
+        chessBoard.setPiece(square, piece)
+        selectedSquare = null
+        legalMovesForSelected = emptyList()
+        invalidate()
+        onMoveListener?.invoke()
     }
 
     fun flipBoard() {

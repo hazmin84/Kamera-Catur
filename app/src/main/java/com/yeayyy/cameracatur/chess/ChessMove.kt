@@ -8,6 +8,15 @@ data class Square(val file: Int, val rank: Int) {
     val uciNotation: String
         get() = "${('a' + file)}${rank + 1}"
 
+    val name: String
+        get() = uciNotation
+
+    val fileName: String
+        get() = "${'a' + file}"
+
+    val rankName: String
+        get() = "${rank + 1}"
+
     companion object {
         fun fromUci(str: String): Square {
             require(str.length >= 2)

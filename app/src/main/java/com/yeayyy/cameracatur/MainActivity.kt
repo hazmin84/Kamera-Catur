@@ -1,17 +1,20 @@
 package com.yeayyy.cameracatur
 
+import android.app.Dialog
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.view.Window
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.yeayyy.cameracatur.ui.ChessBoardView
+import com.yeayyy.cameracatur.chess.*
 import com.yeayyy.cameracatur.engine.StockfishEngineService
+import com.yeayyy.cameracatur.ui.ChessBoardView
 import com.yeayyy.cameracatur.vision.ChessBoardDetector
 import com.yeayyy.cameracatur.vision.ChessImageScannerActivity
 import kotlinx.coroutines.launch
@@ -87,6 +90,81 @@ class MainActivity : AppCompatActivity() {
         chessBoardView.onMoveListener = {
             triggerAiEvaluation()
         }
+
+        // 6. Manual Board Editor (Tekan Lama Petak untuk Betulkan Buah Catur)
+        chessBoardView.onSquareLongClickListener = { square ->
+            showPiecePickerDialog(square)
+        }
+    }
+
+    private fun showPiecePickerDialog(square: Square) {
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        dialog.setContentView(R.layout.dialog_piece_picker)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val title = dialog.findViewById<TextView>(R.id.dialogSquareTitle)
+        title.text = "Ubah Buah di Petak ${square.name.uppercase()}"
+
+        // White pieces
+        dialog.findViewById<Button>(R.id.btnPieceWP).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.PAWN, PieceColor.WHITE))
+            dialog.dismiss()
+        }
+        dialog.findViewById<Button>(R.id.btnPieceWN).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.KNIGHT, PieceColor.WHITE))
+            dialog.dismiss()
+        }
+        dialog.findViewById<Button>(R.id.btnPieceWB).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.BISHOP, PieceColor.WHITE))
+            dialog.dismiss()
+        }
+        dialog.findViewById<Button>(R.id.btnPieceWR).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.ROOK, PieceColor.WHITE))
+            dialog.dismiss()
+        }
+        dialog.findViewById<Button>(R.id.btnPieceWQ).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.QUEEN, PieceColor.WHITE))
+            dialog.dismiss()
+        }
+        dialog.findViewById<Button>(R.id.btnPieceWK).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.KING, PieceColor.WHITE))
+            dialog.dismiss()
+        }
+
+        // Black pieces
+        dialog.findViewById<Button>(R.id.btnPieceBP).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.PAWN, PieceColor.BLACK))
+            dialog.dismiss()
+        }
+        dialog.findViewById<Button>(R.id.btnPieceBN).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.KNIGHT, PieceColor.BLACK))
+            dialog.dismiss()
+        }
+        dialog.findViewById<Button>(R.id.btnPieceBB).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.BISHOP, PieceColor.BLACK))
+            dialog.dismiss()
+        }
+        dialog.findViewById<Button>(R.id.btnPieceBR).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.ROOK, PieceColor.BLACK))
+            dialog.dismiss()
+        }
+        dialog.findViewById<Button>(R.id.btnPieceBQ).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.QUEEN, PieceColor.BLACK))
+            dialog.dismiss()
+        }
+        dialog.findViewById<Button>(R.id.btnPieceBK).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, ChessPiece(PieceType.KING, PieceColor.BLACK))
+            dialog.dismiss()
+        }
+
+        // Empty square
+        dialog.findViewById<Button>(R.id.btnPieceEmpty).setOnClickListener {
+            chessBoardView.setPieceAtSquare(square, null)
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     private fun processImageUri(uri: Uri) {
@@ -98,8 +176,8 @@ class MainActivity : AppCompatActivity() {
                     applyDetectedFen(result.fen)
                     Toast.makeText(
                         this@MainActivity,
-                        "Pengesanan berjaya! ${result.detectedPiecesCount} buah dikesan.",
-                        Toast.LENGTH_SHORT
+                        "Pengesanan berjaya! ${result.detectedPiecesCount} buah dikesan. (Tekan lama petak untuk ubah jika perlu)",
+                        Toast.LENGTH_LONG
                     ).show()
                 }
             } catch (e: Exception) {
