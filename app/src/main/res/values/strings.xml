@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Kamera Catur</string>
+    <string name="tagline">Pengimbas Papan Catur AI &amp; Panduan Stockfish</string>
+    <string name="btn_snap_camera">📸 Imbas Guna Kamera</string>
+    <string name="btn_pick_gallery">🖼️ Pilih dari Galeri</string>
+    <string name="btn_play_stockfish">♟️ Main Dari Posisi Ini</string>
+    <string name="btn_reset_board">🔄 Papan Asal</string>
+    <string name="btn_flip_board">🔄 Pusing Papan</string>
+    <string name="label_white_eval">Cadangan Putih (Best Move):</string>
+    <string name="label_black_eval">Cadangan Hitam (Best Move):</string>
+    <string name="scanning_board">Sedang menganalisis grid 8x8 dan kedudukan buah catur...</string>
+    <string name="fen_label">FEN Notation:</string>
+</resources>
