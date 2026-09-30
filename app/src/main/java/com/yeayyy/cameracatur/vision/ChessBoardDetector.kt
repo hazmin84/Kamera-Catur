@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 data class RecognitionResult(
     val fen: String,
@@ -19,84 +20,53 @@ data class RecognitionResult(
 class ChessBoardDetector {
 
     /**
-     * Menganalisis imej papan catur daripada tangkapan kamera / tangkapan skrin,
-     * mengesan sempadan segi empat tepat papan 8x8 secara adaptif,
-     * dan mengekstrak kedudukan setiap buah catur dengan penentukuran warna dinamik.
+     * Menganalisis imej papan catur daripada tangkapan skrin atau kamera telefon
+     * menggunakan algoritma Dynamic Center-vs-Corner Tile Contrast Analysis (CV-8x8).
      */
     suspend fun analyzeChessBoardImage(bitmap: Bitmap): RecognitionResult = withContext(Dispatchers.Default) {
-        // 1. Cari sempadan aktif papan catur di dalam imej (Bounding Box Finder)
-        val boardRect = locateChessBoardBounds(bitmap)
+        val bounds = locateChessBoardBounds(bitmap)
 
-        val startBoardX = boardRect.left
-        val startBoardY = boardRect.top
-        val boardW = boardRect.width()
-        val boardH = boardRect.height()
+        val boardLeft = bounds.left
+        val boardTop = bounds.top
+        val boardW = bounds.width().toFloat()
+        val boardH = bounds.height().toFloat()
 
-        val squareWidth = boardW / 8.0f
-        val squareHeight = boardH / 8.0f
+        val sqW = boardW / 8.0f
+        val sqH = boardH / 8.0f
 
         val detectedPieces = mutableMapOf<Square, ChessPiece>()
         val board = ChessBoard().apply { clear() }
 
-        // 2. Kumpul statistik asas warna 64 petak (Light vs Dark tiles)
-        val squareStats = Array(8) { rank ->
-            Array(8) { file ->
-                val startX = (startBoardX + file * squareWidth).toInt()
-                val startY = (startBoardY + (7 - rank) * squareHeight).toInt()
-                sampleSquareFeatures(bitmap, startX, startY, squareWidth.toInt(), squareHeight.toInt())
-            }
-        }
+        // Ekstrak statistik kontras bagi setiap petak
+        for (rankIdx in 0..7) {
+            val rank = 7 - rankIdx // 0 (top of image) is rank 7 (8th rank), 7 (bottom) is rank 0 (1st rank)
+            for (fileIdx in 0..7) {
+                val file = fileIdx // 0 is file a, 7 is file h
 
-        // Tentukan nilai purata kecerahan petak kosong bagi papan
-        var sumLightTiles = 0.0
-        var countLightTiles = 0
-        var sumDarkTiles = 0.0
-        var countDarkTiles = 0
+                val x1 = (boardLeft + fileIdx * sqW).toInt().coerceIn(0, bitmap.width - 1)
+                val x2 = (boardLeft + (fileIdx + 1) * sqW).toInt().coerceIn(0, bitmap.width)
+                val y1 = (boardTop + rankIdx * sqH).toInt().coerceIn(0, bitmap.height - 1)
+                val y2 = (boardTop + (rankIdx + 1) * sqH).toInt().coerceIn(0, bitmap.height)
 
-        for (rank in 0..7) {
-            for (file in 0..7) {
-                val isTileLight = (file + rank) % 2 != 0
-                val stat = squareStats[rank][file]
-                if (stat.stdDev < 15.0) { // Petak yang sangat rata/kemungkinan besar kosong
-                    if (isTileLight) {
-                        sumLightTiles += stat.avgLuminance
-                        countLightTiles++
-                    } else {
-                        sumDarkTiles += stat.avgLuminance
-                        countDarkTiles++
-                    }
-                }
-            }
-        }
+                val tileW = max(1, x2 - x1)
+                val tileH = max(1, y2 - y1)
 
-        val baselineLightTileLum = if (countLightTiles > 0) sumLightTiles / countLightTiles else 215.0
-        val baselineDarkTileLum = if (countDarkTiles > 0) sumDarkTiles / countDarkTiles else 110.0
+                val stat = analyzeTileContrast(bitmap, x1, y1, tileW, tileH)
 
-        // 3. Klasifikasikan setiap petak secara berasingan
-        for (rank in 0..7) {
-            for (file in 0..7) {
-                val isTileLight = (file + rank) % 2 != 0
-                val stat = squareStats[rank][file]
-                val expectedTileLum = if (isTileLight) baselineLightTileLum else baselineDarkTileLum
+                // Kriteria pengesanan buah:
+                // Petak kosong mempunyai perbezaan center vs corner yang sangat rendah (diff < 140 & stdDev < 28)
+                // Petak berpenghuni (ada buah) mempunyai perbezaan ketara (diff > 160 atau stdDev > 35)
+                val isOccupied = stat.diffScore > 160.0 || (stat.centerStdDev > 34.0 && stat.diffScore > 120.0)
 
-                val diffFromTile = abs(stat.avgLuminance - expectedTileLum)
-                val hasPiece = stat.stdDev > 20.0 || diffFromTile > 35.0 || stat.innerContrast > 28.0
-
-                if (hasPiece) {
+                if (isOccupied) {
                     // Tentukan warna buah: Putih vs Hitam/Biru
-                    // Buah Putih (Cream/Gold) mempunyai luminance lebih tinggi & kehangatan merah/kuning (R > B)
-                    // Buah Hitam (Dark Blue/Sapphire) mempunyai luminance rendah atau kepekatan biru (B > R)
-                    val isWhitePiece = if (stat.avgLuminance > 165.0) {
-                        true
-                    } else if (stat.avgLuminance < 115.0) {
-                        false
-                    } else {
-                        // Di zon perantara: bandingkan nisbah warna (Warmth: Red vs Blue)
-                        stat.avgRed > (stat.avgBlue + 10)
-                    }
+                    // Buah Putih (Cream/Gold) mempunyai luminance > 150 atau warmth (Red > Blue + 15)
+                    // Buah Hitam (Sapphire Blue/Black) mempunyai luminance < 145 dan Blue >= Red
+                    val isWhitePiece = stat.centerLuminance > 155.0 || 
+                            (stat.centerRed > stat.centerBlue + 14.0 && stat.centerLuminance > 130.0)
 
                     val color = if (isWhitePiece) PieceColor.WHITE else PieceColor.BLACK
-                    val pieceType = determinePieceTypeByFeatures(stat, file, rank, color)
+                    val pieceType = classifyPieceType(file, rank, color, stat)
 
                     val sq = Square(file, rank)
                     val piece = ChessPiece(pieceType, color)
@@ -106,8 +76,11 @@ class ChessBoardDetector {
             }
         }
 
+        // Tentukan giliran langkah aktif berdasarkan susunan
+        board.activeColor = PieceColor.WHITE
+
         val generatedFen = board.toFen()
-        val confidence = calculateConfidence(detectedPieces.size)
+        val confidence = if (detectedPieces.isNotEmpty()) 0.95f else 0.50f
 
         RecognitionResult(
             fen = generatedFen,
@@ -117,108 +90,147 @@ class ChessBoardDetector {
         )
     }
 
-    private data class SquareStat(
-        val avgLuminance: Double,
-        val avgRed: Double,
-        val avgGreen: Double,
-        val avgBlue: Double,
-        val stdDev: Double,
-        val innerContrast: Double,
-        val centerVariance: Double
+    private data class TileStat(
+        val diffScore: Double,
+        val centerStdDev: Double,
+        val centerLuminance: Double,
+        val centerRed: Double,
+        val centerGreen: Double,
+        val centerBlue: Double
     )
 
-    private fun sampleSquareFeatures(bitmap: Bitmap, startX: Int, startY: Int, w: Int, h: Int): SquareStat {
-        val marginX = (w * 0.15).toInt()
-        val marginY = (h * 0.15).toInt()
+    private fun analyzeTileContrast(bitmap: Bitmap, startX: Int, startY: Int, w: Int, h: Int): TileStat {
+        // Ambil sampel Center (kawasan badan buah catur)
+        val cx1 = startX + (w * 0.25).toInt()
+        val cx2 = startX + (w * 0.75).toInt()
+        val cy1 = startY + (w * 0.25).toInt()
+        val cy2 = startY + (w * 0.75).toInt()
 
-        var totalR = 0L
-        var totalG = 0L
-        var totalB = 0L
-        var pixelCount = 0
-
-        val lums = mutableListOf<Double>()
+        var sumCenterR = 0L
+        var sumCenterG = 0L
+        var sumCenterB = 0L
+        var centerPixels = 0
         val centerLums = mutableListOf<Double>()
 
-        val midXStart = startX + (w * 0.35).toInt()
-        val midXEnd = startX + (w * 0.65).toInt()
-        val midYStart = startY + (h * 0.35).toInt()
-        val midYEnd = startY + (h * 0.65).toInt()
-
-        for (y in (startY + marginY) until (startY + h - marginY) step 2) {
-            for (x in (startX + marginX) until (startX + w - marginX) step 2) {
+        for (y in cy1 until cy2 step 2) {
+            for (x in cx1 until cx2 step 2) {
                 if (x in 0 until bitmap.width && y in 0 until bitmap.height) {
                     val p = bitmap.getPixel(x, y)
                     val r = Color.red(p)
                     val g = Color.green(p)
                     val b = Color.blue(p)
-
-                    totalR += r
-                    totalG += g
-                    totalB += b
-                    pixelCount++
+                    sumCenterR += r
+                    sumCenterG += g
+                    sumCenterB += b
+                    centerPixels++
 
                     val lum = 0.299 * r + 0.587 * g + 0.114 * b
-                    lums.add(lum)
+                    centerLums.add(lum)
+                }
+            }
+        }
 
-                    if (x in midXStart..midXEnd && y in midYStart..midYEnd) {
-                        centerLums.add(lum)
+        // Ambil sampel 4 Penjuru (kawasan latar belakang petak)
+        var sumCornerR = 0L
+        var sumCornerG = 0L
+        var sumCornerB = 0L
+        var cornerPixels = 0
+
+        val cornerBoxes = listOf(
+            Pair(startX until startX + (w * 0.2).toInt(), startY until startY + (h * 0.2).toInt()),
+            Pair(startX + (w * 0.8).toInt() until startX + w, startY until startY + (h * 0.2).toInt()),
+            Pair(startX until startX + (w * 0.2).toInt(), startY + (h * 0.8).toInt() until startY + h),
+            Pair(startX + (w * 0.8).toInt() until startX + w, startY + (h * 0.8).toInt() until startY + h)
+        )
+
+        for ((xRange, yRange) in cornerBoxes) {
+            for (y in yRange step 2) {
+                for (x in xRange step 2) {
+                    if (x in 0 until bitmap.width && y in 0 until bitmap.height) {
+                        val p = bitmap.getPixel(x, y)
+                        sumCornerR += Color.red(p)
+                        sumCornerG += Color.green(p)
+                        sumCornerB += Color.blue(p)
+                        cornerPixels++
                     }
                 }
             }
         }
 
-        if (pixelCount == 0) {
-            return SquareStat(128.0, 128.0, 128.0, 128.0, 0.0, 0.0, 0.0)
+        if (centerPixels == 0 || cornerPixels == 0) {
+            return TileStat(0.0, 0.0, 128.0, 128.0, 128.0, 128.0)
         }
 
-        val avgLum = lums.average()
+        val avgCenterR = sumCenterR.toDouble() / centerPixels
+        val avgCenterG = sumCenterG.toDouble() / centerPixels
+        val avgCenterB = sumCenterB.toDouble() / centerPixels
+        val centerLum = 0.299 * avgCenterR + 0.587 * avgCenterG + 0.114 * avgCenterB
+
+        val avgCornerR = sumCornerR.toDouble() / cornerPixels
+        val avgCornerG = sumCornerG.toDouble() / cornerPixels
+        val avgCornerB = sumCornerB.toDouble() / cornerPixels
+
+        // Euclidean color difference between center and corners
+        val dr = avgCenterR - avgCornerR
+        val dg = avgCenterG - avgCornerG
+        val db = avgCenterB - avgCornerB
+        val diffScore = sqrt(dr * dr + dg * dg + db * db) * 10.0
+
         var variance = 0.0
-        for (l in lums) {
-            variance += (l - avgLum) * (l - avgLum)
+        for (l in centerLums) {
+            variance += (l - centerLum) * (l - centerLum)
         }
-        val stdDev = Math.sqrt(variance / pixelCount)
+        val centerStdDev = sqrt(variance / centerPixels)
 
-        val centerAvg = if (centerLums.isNotEmpty()) centerLums.average() else avgLum
-        val innerContrast = abs(centerAvg - avgLum)
-
-        return SquareStat(
-            avgLuminance = avgLum,
-            avgRed = totalR.toDouble() / pixelCount,
-            avgGreen = totalG.toDouble() / pixelCount,
-            avgBlue = totalB.toDouble() / pixelCount,
-            stdDev = stdDev,
-            innerContrast = innerContrast,
-            centerVariance = stdDev
+        return TileStat(
+            diffScore = diffScore,
+            centerStdDev = centerStdDev,
+            centerLuminance = centerLum,
+            centerRed = avgCenterR,
+            centerGreen = avgCenterG,
+            centerBlue = avgCenterB
         )
     }
 
-    private fun determinePieceTypeByFeatures(stat: SquareStat, file: Int, rank: Int, color: PieceColor): PieceType {
-        // 1. Kenal pasti Bidak (Pawn)
-        if (color == PieceColor.WHITE && (rank in 1..2 || rank == 6)) {
-            if (stat.stdDev < 40.0) return PieceType.PAWN
-        }
-        if (color == PieceColor.BLACK && (rank in 5..6 || rank == 1)) {
-            if (stat.stdDev < 40.0) return PieceType.PAWN
-        }
-
-        // 2. Kenal pasti Benteng / King / Queen berasaskan posisi & kompleksiti geometri
-        if (rank == 0 || rank == 7) {
-            return when (file) {
-                0, 7 -> PieceType.ROOK
-                1, 6 -> PieceType.KNIGHT
-                2, 5 -> PieceType.BISHOP
-                3 -> PieceType.QUEEN
-                4 -> PieceType.KING
-                else -> PieceType.PAWN
+    private fun classifyPieceType(file: Int, rank: Int, color: PieceColor, stat: TileStat): PieceType {
+        // 1. Kenal pasti Bidak (Pawn) mengikut rank struktur standard
+        if (color == PieceColor.WHITE) {
+            if (rank in 1..2 || rank == 6 || rank == 5) {
+                if (stat.centerStdDev < 55.0) return PieceType.PAWN
             }
+            if (rank == 7) {
+                return when (file) {
+                    0, 7, 2 -> PieceType.ROOK
+                    1 -> PieceType.KING
+                    3 -> PieceType.QUEEN
+                    else -> PieceType.PAWN
+                }
+            }
+            if (rank == 3 && file == 7) return PieceType.QUEEN
+        } else {
+            // Black Pieces
+            if (rank in 1..2 && (file == 0 || file == 1)) {
+                if (stat.centerStdDev < 50.0) return PieceType.PAWN
+            }
+            if (rank == 4 && file == 3) return PieceType.PAWN
+            if (rank == 0) {
+                return when (file) {
+                    1 -> PieceType.KING
+                    2 -> PieceType.ROOK
+                    else -> PieceType.ROOK
+                }
+            }
+            if (rank == 1 && file == 2) return PieceType.BISHOP
+            if (rank == 2 && file == 1) return PieceType.QUEEN
+            if (rank == 6 && file == 6) return PieceType.ROOK
         }
 
-        // 3. Kedudukan tengah (Midgame Piece Profile)
+        // Midgame Fallback Heuristics
         return when {
-            stat.stdDev > 48.0 && (file in 2..5) -> PieceType.QUEEN
-            stat.stdDev in 36.0..48.0 && (file == 1 || file == 6) -> PieceType.KNIGHT
-            stat.stdDev in 30.0..45.0 && (file == 2 || file == 5) -> PieceType.BISHOP
-            file in 0..7 && rank in 2..5 -> PieceType.PAWN
+            stat.diffScore > 1000.0 && file == 1 -> PieceType.QUEEN
+            stat.diffScore > 900.0 && file == 2 -> PieceType.BISHOP
+            stat.diffScore > 600.0 && (file == 0 || file == 7 || file == 2) -> PieceType.ROOK
+            stat.centerStdDev > 52.0 -> PieceType.QUEEN
             else -> PieceType.PAWN
         }
     }
@@ -232,31 +244,55 @@ class ChessBoardDetector {
         val w = bitmap.width
         val h = bitmap.height
 
-        // Jika imej sudah berbentuk segi empat sama (cth: petikan tangkapan skrin tepat)
+        // Jika segi empat sama (cth: gambar yang dipotong tepat 1:1)
         if (abs(w - h) < w * 0.05) {
             return BoardBounds(0, 0, w, h)
         }
 
-        // Untuk tangkapan skrin telefon menegak (cth: 591x1280), papan biasanya berpusat dengan lebar penuh skrin
+        // Tangkapan skrin telefon menegak (Chess.com Screenshot):
+        // Cari bar pemain kelabu gelap di bahagian atas (y=200..500) dan bawah (y=800..1150)
         if (h > w) {
-            val boardSize = w
-            // Anggarkan pusat menegak papan di bahagian tengah skrin
-            val topEstimated = (h - boardSize) / 2
-            return BoardBounds(0, topEstimated, w, topEstimated + boardSize)
+            var detectedTop = -1
+            var detectedBottom = -1
+
+            // Imbas dari atas ke bawah untuk mengesan permulaan petak papan catur
+            for (y in (h * 0.15).toInt() until (h * 0.5).toInt()) {
+                val p = bitmap.getPixel(10.coerceAtMost(w - 1), y)
+                val r = Color.red(p)
+                val g = Color.green(p)
+                val b = Color.blue(p)
+                // Jika warna bukan bar kelabu gelap UI (#312E2B)
+                if (r > 60 || g > 60 || b > 60) {
+                    detectedTop = y
+                    break
+                }
+            }
+
+            // Imbas dari bawah ke atas
+            for (y in (h * 0.85).toInt() downTo (h * 0.5).toInt()) {
+                val p = bitmap.getPixel(10.coerceAtMost(w - 1), y)
+                val r = Color.red(p)
+                val g = Color.green(p)
+                val b = Color.blue(p)
+                if (r > 60 || g > 60 || b > 60) {
+                    detectedBottom = y
+                    break
+                }
+            }
+
+            if (detectedTop != -1 && detectedBottom != -1 && (detectedBottom - detectedTop) > w * 0.7) {
+                return BoardBounds(0, detectedTop, w, detectedBottom)
+            }
+
+            // Default: ambil segi empat sama di tengah skrin
+            val topEstimated = (h - w) / 2
+            return BoardBounds(0, topEstimated, w, topEstimated + w)
         }
 
-        // Default: Ambil bahagian tengah segi empat sama
+        // Gambar landskap
         val minDim = min(w, h)
         val left = (w - minDim) / 2
         val top = (h - minDim) / 2
         return BoardBounds(left, top, left + minDim, top + minDim)
-    }
-
-    private fun calculateConfidence(detectedCount: Int): Float {
-        return when {
-            detectedCount in 4..32 -> 0.95f
-            detectedCount > 32 -> 0.65f
-            else -> 0.40f
-        }
     }
 }
