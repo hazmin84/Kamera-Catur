@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.Window
 import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,6 +27,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvBlackEval: TextView
     private lateinit var btnScanCamera: Button
     private lateinit var btnPickGallery: Button
+    private lateinit var btnEditFen: Button
     private lateinit var btnFlipBoard: Button
     private lateinit var btnResetBoard: Button
 
@@ -56,6 +58,7 @@ class MainActivity : AppCompatActivity() {
         tvBlackEval = findViewById(R.id.tvBlackEval)
         btnScanCamera = findViewById(R.id.btnScanCamera)
         btnPickGallery = findViewById(R.id.btnPickGallery)
+        btnEditFen = findViewById(R.id.btnEditFen)
         btnFlipBoard = findViewById(R.id.btnFlipBoard)
         btnResetBoard = findViewById(R.id.btnResetBoard)
 
@@ -75,26 +78,62 @@ class MainActivity : AppCompatActivity() {
             pickImageLauncher.launch("image/*")
         }
 
-        // 3. Flip Board (Toggle Perspective)
+        // 3. FEN Direct Editor Dialog
+        btnEditFen.setOnClickListener {
+            showFenInputDialog()
+        }
+
+        // 4. Flip Board (Toggle Perspective)
         btnFlipBoard.setOnClickListener {
             chessBoardView.flipBoard()
         }
 
-        // 4. Reset to Initial Standard Position
+        // 5. Reset to Initial Standard Position
         btnResetBoard.setOnClickListener {
             chessBoardView.loadFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
             triggerAiEvaluation()
         }
 
-        // 5. Board interactive move listener -> auto re-eval
+        // 6. Board interactive move listener -> auto re-eval
         chessBoardView.onMoveListener = {
             triggerAiEvaluation()
         }
 
-        // 6. Manual Board Editor (Tekan Lama Petak untuk Betulkan Buah Catur)
+        // 7. Manual Board Editor (Tekan Lama Petak untuk Betulkan Buah Catur)
         chessBoardView.onSquareLongClickListener = { square ->
             showPiecePickerDialog(square)
         }
+    }
+
+    private fun showFenInputDialog() {
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        dialog.setContentView(R.layout.dialog_fen_input)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val etFen = dialog.findViewById<EditText>(R.id.etFenInput)
+        etFen.setText(chessBoardView.chessBoard.toFen())
+
+        dialog.findViewById<Button>(R.id.btnCancelFen).setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.findViewById<Button>(R.id.btnApplyFen).setOnClickListener {
+            val input = etFen.text.toString().trim()
+            if (input.isNotEmpty()) {
+                val success = chessBoardView.chessBoard.loadFen(input)
+                if (success) {
+                    chessBoardView.invalidate()
+                    triggerAiEvaluation()
+                    Toast.makeText(this, "Kedudukan FEN berjaya dimuatkan!", Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
+                } else {
+                    Toast.makeText(this, "Format FEN tidak sah.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        dialog.show()
     }
 
     private fun showPiecePickerDialog(square: Square) {
@@ -176,7 +215,7 @@ class MainActivity : AppCompatActivity() {
                     applyDetectedFen(result.fen)
                     Toast.makeText(
                         this@MainActivity,
-                        "Pengesanan berjaya! ${result.detectedPiecesCount} buah dikesan. (Tekan lama petak untuk ubah jika perlu)",
+                        "Pengesanan berjaya! ${result.detectedPiecesCount} buah dikesan. (Tekan '📝 FEN' atau tekan lama petak untuk ubah)",
                         Toast.LENGTH_LONG
                     ).show()
                 }
